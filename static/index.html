@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CloudOps Simulator</title>
+  <style>
+    /* paleta: marinho + teal/violeta */
+    :root {
+      --bg: #041834;
+      --card: rgba(10, 38, 71, .86);
+      --field: #06203f;
+      --border: #1b3d66;
+      --text: #f7f8fe;
+      --muted: #9db3cf;
+      --accent: #00bec8;    /* teal */
+      --accent-2: #7142fb;  /* violeta */
+      --blue: #0096dc;
+      --ok: #00bec8;
+      --err: #ff645a;       /* coral */
+      --warn: #ffb020;
+      --p4: #8fa3bd;
+      --radius: 14px;
+      --ease: cubic-bezier(.16, 1, .3, 1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(circle, rgba(157, 179, 207, .09) 1px, transparent 1.5px) 0 0 / 30px 30px,
+        var(--bg);
+      color: var(--text);
+      font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+    /* brilhos suaves que se movem devagar no fundo */
+    body::before, body::after {
+      content: ""; position: fixed; width: 55vmax; height: 55vmax; border-radius: 50%;
+      filter: blur(90px); opacity: .2; pointer-events: none; z-index: -1;
+    }
+    body::before { background: var(--accent); left: -22vmax; top: -26vmax; animation: drift 24s ease-in-out infinite alternate; }
+    body::after { background: var(--accent-2); right: -24vmax; bottom: -28vmax; animation: drift 28s ease-in-out infinite alternate-reverse; }
+    @keyframes drift { to { transform: translate(8vmax, 6vmax); } }
+
+    .card {
+      position: relative;
+      width: 100%;
+      max-width: 440px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 28px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 24px 60px rgba(0, 0, 0, .45), 0 1px 0 rgba(255, 255, 255, .04) inset;
+      animation: cardIn .7s var(--ease) both;
+    }
+    /* linha em gradiente no topo do cartão, desenhada na entrada */
+    .card::before {
+      content: ""; position: absolute; left: 24px; right: 24px; top: -1px; height: 2px; border-radius: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transform-origin: left; animation: draw .9s var(--ease) .3s both;
+    }
+    @keyframes cardIn { from { opacity: 0; transform: translateY(14px) scale(.985); } to { opacity: 1; transform: none; } }
+    @keyframes draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+
+    /* entrada escalonada dos blocos */
+    header, .subtitle, #form > .field, #form > .row, #form > button { animation: fadeUp .6s var(--ease) both; }
+    .subtitle { animation-delay: .08s; }
+    #form > .field:first-child { animation-delay: .14s; }
+    #form > .row { animation-delay: .2s; }
+    #value-field { animation-delay: .26s; }
+    #submit { animation-delay: .32s; }
+    #random { animation-delay: .38s; }
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+    h1 { font-size: 1.25rem; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+    h1 span { background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .subtitle { color: var(--muted); font-size: .85rem; margin: 0 0 24px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: .72rem; font-weight: 600; padding: 4px 10px; border-radius: 999px;
+      background: rgba(157, 179, 207, .12); color: var(--muted); transition: background .3s, color .3s;
+    }
+    .badge .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .badge.online { background: rgba(0, 190, 200, .12); color: var(--ok); }
+    .badge.online .dot { animation: pulse 1.8s infinite; }
+    .badge.offline { background: rgba(255, 100, 90, .12); color: var(--err); }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(0, 190, 200, .6); } 100% { box-shadow: 0 0 0 7px rgba(0, 190, 200, 0); } }
+
+    .field { margin-bottom: 18px; }
+    label { display: block; font-size: .8rem; font-weight: 550; color: var(--muted); margin-bottom: 7px; }
+    select, input[type="text"] {
+      width: 100%; padding: 11px 13px; font: inherit; font-size: .93rem;
+      color: var(--text); background: var(--field); border: 1px solid var(--border);
+      border-radius: 10px; outline: none; transition: border-color .2s, box-shadow .2s;
+    }
+    select:hover, input[type="text"]:hover { border-color: #2a5486; }
+    select:focus, input[type="text"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0, 190, 200, .18); }
+    select option { background: var(--field); }
+    select { appearance: none; cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%239db3cf' stroke-width='1.8'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 13px center; padding-right: 36px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    .slider-head { display: flex; justify-content: space-between; align-items: baseline; }
+    .value { font-variant-numeric: tabular-nums; font-weight: 700; font-size: .95rem; }
+    input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; margin: 6px 0 2px; }
+    .hint { font-size: .75rem; color: var(--muted); }
+    .field.disabled { opacity: .4; transition: opacity .25s; }
+    .field.disabled input { cursor: not-allowed; }
+    .preview { display: inline-block; margin-left: 6px; font-size: .7rem; padding: 2px 7px; border-radius: 6px; font-weight: 700; transition: background .25s, color .25s; }
+    .preview.pop { animation: pop .35s cubic-bezier(.34, 1.56, .64, 1); }
+    @keyframes pop { 0% { transform: scale(.75); } 100% { transform: none; } }
+    .P1 { background: rgba(255, 100, 90, .18); color: var(--err); }
+    .P2 { background: rgba(255, 176, 32, .16); color: var(--warn); }
+    .P3 { background: rgba(0, 150, 220, .18); color: #4cb8ee; }
+    .P4 { background: rgba(143, 163, 189, .16); color: var(--p4); }
+
+    button {
+      position: relative; overflow: hidden;
+      width: 100%; margin-top: 6px; padding: 13px; border: 0; border-radius: 12px;
+      font: inherit; font-weight: 650; font-size: .95rem; color: #fff; cursor: pointer;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      box-shadow: 0 8px 22px rgba(0, 190, 200, .25);
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: transform .15s ease, box-shadow .25s ease, filter .2s ease;
+    }
+    /* brilho que atravessa o botão no hover */
+    button::after {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, .22) 50%, transparent 65%);
+      transform: translateX(-100%);
+    }
+    button:hover:not(:disabled)::after { transition: transform .7s ease; transform: translateX(100%); }
+    button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0, 190, 200, .35); filter: brightness(1.06); }
+    button:active:not(:disabled) { transform: translateY(1px) scale(.985); box-shadow: 0 4px 12px rgba(0, 190, 200, .22); }
+    button:disabled { cursor: wait; filter: saturate(.6) brightness(.85); }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff;
+      border-radius: 50%; animation: spin .7s linear infinite; display: none; }
+    button.loading .spinner { display: inline-block; }
+    button.secondary { margin-top: 10px; background: rgba(6, 32, 63, .6); color: var(--text);
+      border: 1px solid var(--border); box-shadow: none; }
+    button.secondary::after { background: linear-gradient(105deg, transparent 35%, rgba(0, 190, 200, .14) 50%, transparent 65%); }
+    button.secondary:hover:not(:disabled) { border-color: var(--accent); box-shadow: 0 6px 18px rgba(0, 190, 200, .16); }
+    button.secondary .dice { display: inline-block; transition: transform .6s cubic-bezier(.34, 1.56, .64, 1); }
+    button.secondary.rolling .dice { transform: rotate(360deg); }
+    .flash { animation: flash .7s ease; }
+    @keyframes flash { 0% { box-shadow: 0 0 0 0 rgba(0, 190, 200, .55); border-color: var(--accent); } 100% { box-shadow: 0 0 0 8px rgba(0, 190, 200, 0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .banner {
+      margin-top: 18px; padding: 13px 15px; border-radius: 12px; font-size: .87rem; line-height: 1.45;
+      border: 1px solid transparent; display: none;
+    }
+    .banner.show { display: block; animation: slide .4s var(--ease); }
+    .banner.ok { background: rgba(0, 190, 200, .08); border-color: rgba(0, 190, 200, .35); animation: slide .4s var(--ease), glow 1.2s ease .1s; }
+    .banner.err { background: rgba(255, 100, 90, .08); border-color: rgba(255, 100, 90, .35); }
+    .banner.warn { background: rgba(255, 176, 32, .08); border-color: rgba(255, 176, 32, .35); }
+    .banner strong { display: block; margin-bottom: 3px; }
+    .banner .meta { color: var(--muted); font-size: .78rem; margin-top: 4px; word-break: break-all; }
+    .banner a { color: var(--ok); font-weight: 700; text-decoration: none; }
+    .banner a:hover { text-decoration: underline; }
+    @keyframes slide { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+    @keyframes glow { 0% { box-shadow: 0 0 0 0 rgba(0, 190, 200, .45); } 100% { box-shadow: 0 0 0 10px rgba(0, 190, 200, 0); } }
+    footer { margin-top: 20px; text-align: center; font-size: .72rem; color: var(--muted); }
+    footer a { color: var(--muted); transition: color .2s; }
+    footer a:hover { color: var(--accent); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <header>
+      <h1>CloudOps <span>Simulator</span></h1>
+      <span id="status" class="badge"><span class="dot"></span><span id="status-text">verificando…</span></span>
+    </header>
+    <p class="subtitle">Simule um alerta de infraestrutura e abra um incidente no Jira.</p>
+
+    <form id="form" novalidate>
+      <div class="field">
+        <label for="alert_type">Tipo de Alerta</label>
+        <select id="alert_type">
+          <option value="cpu_high">CPU Alta</option>
+          <option value="memory_high">Memória Esgotada</option>
+          <option value="disk_high">Disco Cheio</option>
+          <option value="latency_high">Latência Alta</option>
+          <option value="service_down">Queda de Serviço</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="host">Host / Servidor</label>
+          <input id="host" type="text" value="web-01" maxlength="100" autocomplete="off" required>
+        </div>
+        <div class="field">
+          <label for="environment">Ambiente</label>
+          <select id="environment">
+            <option value="production">production</option>
+            <option value="staging">staging</option>
+            <option value="development">dev</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="field" id="value-field">
+        <div class="slider-head">
+          <label for="value">Valor da métrica <span id="preview" class="preview P1">P1</span></label>
+          <span class="value" id="value-label">97%</span>
+        </div>
+        <input id="value" type="range" min="0" max="100" step="1" value="97">
+        <div class="hint" id="value-hint">P1 ≥ 95% · P2 ≥ 85% · P3 ≥ 70% · P4 abaixo (em produção)</div>
+      </div>
+
+      <button id="submit" type="submit">
+        <span class="spinner" aria-hidden="true"></span>
+        <span id="submit-text">Disparar Incidente</span>
+      </button>
+      <button id="random" type="button" class="secondary">
+        <span class="dice" aria-hidden="true">🎲</span>
+        <span>Gerar chamado aleatório</span>
+      </button>
+    </form>
+
+    <div id="banner" class="banner" role="status" aria-live="polite"></div>
+
+    <footer>Alertas simulados · a severidade final é calculada pela API · <a href="/docs">/docs</a></footer>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const form = $("form"), btn = $("submit"), banner = $("banner");
+    const typeSel = $("alert_type"), envSel = $("environment"), valueInput = $("value");
+
+    // Prévia apenas visual. Espelha as regras de app/classifier.py; a fonte da verdade é a API.
+    const LEVELS = ["P1", "P2", "P3", "P4"];
+    const THRESHOLDS = {
+      cpu_high: [95, 85, 70],
+      memory_high: [95, 85, 70],
+      disk_high: [95, 90, 80],
+      latency_high: [5000, 2000, 1000],
+    };
+    const DOWNGRADE = { production: 0, staging: 1, development: 2 };
+
+    // Faixa do slider e unidade por tipo de métrica.
+    const METRIC = {
+      cpu_high:     { max: 100,  step: 1,  unit: "%",   def: 97 },
+      memory_high:  { max: 100,  step: 1,  unit: "%",   def: 90 },
+      disk_high:    { max: 100,  step: 1,  unit: "%",   def: 92 },
+      latency_high: { max: 8000, step: 50, unit: " ms", def: 2300 },
+    };
+    let lastType = typeSel.value;
+
+    function previewSeverity() {
+      const type = typeSel.value;
+      let base = 0;
+      if (type !== "service_down") {
+        const v = Number(valueInput.value);
+        const t = THRESHOLDS[type];
+        base = v >= t[0] ? 0 : v >= t[1] ? 1 : v >= t[2] ? 2 : 3;
+      }
+      return LEVELS[Math.min(base + DOWNGRADE[envSel.value], 3)];
+    }
+
+    function hintFor(type) {
+      if (type === "service_down") return "Queda de serviço não usa métrica: é P1 em produção (staging −1, dev −2).";
+      const [a, b, c] = THRESHOLDS[type], u = METRIC[type].unit;
+      return `P1 ≥ ${a}${u} · P2 ≥ ${b}${u} · P3 ≥ ${c}${u} · P4 abaixo (em produção)`;
+    }
+
+    function refresh() {
+      const type = typeSel.value;
+      const down = type === "service_down";
+      // Ao trocar de tipo, ajusta a escala do slider (% ou ms) e um valor padrão coerente.
+      if (!down && type !== lastType) {
+        const m = METRIC[type];
+        valueInput.max = m.max;
+        valueInput.step = m.step;
+        if (METRIC[lastType]?.unit !== m.unit) valueInput.value = m.def;
+      }
+      lastType = type;
+      $("value-field").classList.toggle("disabled", down);
+      valueInput.disabled = down;
+      $("value-label").textContent = down ? "—" : `${valueInput.value}${METRIC[type].unit}`;
+      $("value-hint").textContent = hintFor(type);
+      const sev = previewSeverity();
+      const p = $("preview");
+      const changed = p.textContent !== sev;
+      p.textContent = sev;
+      p.className = `preview ${sev}`;
+      if (changed) { void p.offsetWidth; p.classList.add("pop"); }
+    }
+    [typeSel, envSel, valueInput].forEach((el) => el.addEventListener("input", refresh));
+    refresh();
+
+    // ---------------- Chamado aleatório ----------------
+    // Sorteia tipo, host, ambiente, valor e mensagem; preenche o formulário e envia.
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const between = (min, max, step = 1) => Math.round((min + Math.random() * (max - min)) / step) * step;
+
+    const RANDOM_SCENARIOS = {
+      cpu_high: {
+        hosts: ["web-01", "web-02", "api-01", "worker-03"],
+        messages: ["Uso de CPU acima do esperado", "Pico de processamento após deploy", "Processo consumindo CPU continuamente"],
+      },
+      memory_high: {
+        hosts: ["api-02", "worker-01", "cache-01", "web-03"],
+        messages: ["Consumo de memória crescente (possível vazamento)", "Memória quase esgotada", "Swap em uso elevado"],
+      },
+      disk_high: {
+        hosts: ["db-01", "db-02", "logs-01", "backup-01"],
+        messages: ["Disco quase cheio", "Crescimento rápido de arquivos de log", "Volume de dados acima do limite"],
+      },
+      latency_high: {
+        hosts: ["api-03", "gateway-01", "web-01", "auth-01"],
+        messages: ["Tempo de resposta elevado", "Lentidão relatada por usuários", "Latência alta em chamadas externas"],
+      },
+      service_down: {
+        hosts: ["api-02", "auth-01", "payments-01", "web-02"],
+        messages: ["Serviço não responde ao health check", "Serviço de pagamentos indisponível", "Falha ao iniciar o serviço"],
+      },
+    };
+
+    // Uma faixa de valor por severidade base, para os chamados variarem entre P1 e P4.
+    const BANDS = {
+      cpu_high:     [[95, 99], [85, 94], [70, 84], [40, 69]],
+      memory_high:  [[95, 99], [85, 94], [70, 84], [40, 69]],
+      disk_high:    [[95, 99], [90, 94], [80, 89], [50, 79]],
+      latency_high: [[5000, 8000], [2000, 4950], [1000, 1950], [300, 950]],
+    };
+
+    // Produção aparece mais, como na vida real.
+    const ENV_WEIGHTS = [["production", 0.6], ["staging", 0.25], ["development", 0.15]];
+    function pickEnv() {
+      let r = Math.random();
+      for (const [env, w] of ENV_WEIGHTS) { if ((r -= w) < 0) return env; }
+      return "production";
+    }
+
+    function randomize() {
+      const types = Object.keys(RANDOM_SCENARIOS).filter((t) => t !== typeSel.value); // evita repetir o tipo anterior
+      const type = pick(types);
+      const sc = RANDOM_SCENARIOS[type];
+      typeSel.value = type;
+      refresh(); // ajusta a escala do slider antes de definir o valor
+      $("host").value = pick(sc.hosts);
+      envSel.value = pickEnv();
+      if (type !== "service_down") {
+        const [min, max] = pick(BANDS[type]);
+        valueInput.value = between(min, max, METRIC[type].step);
+      }
+      refresh();
+      for (const el of [typeSel, $("host"), envSel, valueInput]) {
+        el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+      }
+      return pick(sc.messages);
+    }
+
+    // Monta o banner com textContent (nunca innerHTML com dados externos).
+    function showBanner(kind, title, message, meta, link) {
+      banner.className = `banner show ${kind}`;
+      banner.replaceChildren();
+      const strong = document.createElement("strong");
+      strong.textContent = title;
+      banner.append(strong);
+      if (link) {
+        const a = document.createElement("a");
+        a.href = link.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.textContent = link.label;
+        banner.append(a, document.createTextNode(message ? ` ${message}` : ""));
+      } else if (message) {
+        banner.append(document.createTextNode(message));
+      }
+      if (meta) {
+        const m = document.createElement("div");
+        m.className = "meta";
+        m.textContent = meta;
+        banner.append(m);
+      }
+    }
+
+    const randomBtn = $("random");
+
+    function setLoading(on) {
+      btn.disabled = on;
+      randomBtn.disabled = on;
+      btn.classList.toggle("loading", on);
+      $("submit-text").textContent = on ? "Enviando ao Jira…" : "Disparar Incidente";
+    }
+
+    randomBtn.addEventListener("click", () => {
+      randomBtn.classList.toggle("rolling");
+      sendAlert(randomize());
+    });
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      sendAlert();
+    });
+
+    async function sendAlert(message) {
+      const host = $("host").value.trim();
+      if (!host) {
+        showBanner("err", "Host obrigatório", "Informe o nome do servidor.");
+        $("host").focus();
+        return;
+      }
+      const type = typeSel.value;
+      const payload = {
+        source: "web-simulator",
+        host,
+        alert_type: type,
+        environment: envSel.value,
+        timestamp: new Date().toISOString(),
+      };
+      if (type !== "service_down") payload.value = Number(valueInput.value);
+      if (message) payload.message = message;
+
+      setLoading(true);
+      banner.className = "banner";
+      try {
+        const res = await fetch("/alerts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const body = await res.json().catch(() => ({}));
+
+        if (res.status === 201 && body.jira_issue) {
+          showBanner("ok", `Incidente ${body.severity} criado no Jira`, "",
+            `alert_id: ${body.alert_id}`,
+            { url: body.jira_issue.url, label: body.jira_issue.key });
+        } else if (res.status === 422) {
+          const detail = Array.isArray(body.detail)
+            ? body.detail.map((d) => d.msg).join("; ") : "Dados inválidos.";
+          showBanner("err", "Alerta rejeitado (422)", detail);
+        } else if (body.error) {
+          const unknown = body.error.jira_result === "unknown";
+          showBanner(unknown ? "warn" : "err",
+            unknown ? `Resultado incerto (${res.status})` : `Falha ao criar a issue (${res.status})`,
+            body.error.message,
+            `${body.error.code} · severidade ${body.severity} · alert_id ${body.alert_id}`);
+        } else {
+          showBanner("err", `Erro inesperado (${res.status})`, "A API retornou uma resposta não reconhecida.");
+        }
+      } catch (err) {
+        showBanner("err", "Sem conexão com a API", "Verifique se o servidor está em execução.");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // Badge de status: consulta GET /health (verifica só a API, não o Jira).
+    fetch("/health")
+      .then((r) => r.ok ? r.json() : Promise.reject())
+      .then(() => { $("status").className = "badge online"; $("status-text").textContent = "API online"; })
+      .catch(() => { $("status").className = "badge offline"; $("status-text").textContent = "API offline"; });
+  </script>
+</body>
+</html>
